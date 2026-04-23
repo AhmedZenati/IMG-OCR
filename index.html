@@ -2,12 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OCR - Extract Text from Images</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>OCR & PDF Converter - Support English & Arabic</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- PDF.js for PDF rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <!-- Tesseract.js for OCR (supports English & Arabic) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- JSZip for creating .docx files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver.js for saving files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -28,7 +35,7 @@
 
         .container {
             width: 100%;
-            max-width: 800px;
+            max-width: 1000px;
         }
 
         .card {
@@ -40,7 +47,7 @@
 
         header {
             text-align: center;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
         }
 
         h1 {
@@ -55,11 +62,38 @@
             color: #888888;
         }
 
+        .mode-selector {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .mode-btn {
+            padding: 8px 24px;
+            border-radius: 40px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid #333333;
+            background: #2a2a2a;
+            color: #aaa;
+        }
+
+        .mode-btn.active {
+            background: #00d4aa;
+            color: #0f0f0f;
+            border-color: #00d4aa;
+        }
+
         .language-selector {
             display: flex;
             justify-content: center;
             gap: 8px;
-            margin-top: 16px;
+            margin-top: 12px;
         }
 
         .lang-btn {
@@ -129,6 +163,12 @@
             text-decoration: underline;
         }
 
+        .file-limits {
+            margin-top: 12px;
+            font-size: 11px;
+            color: #666;
+        }
+
         #file-input {
             display: none;
         }
@@ -145,13 +185,38 @@
         .preview-container {
             text-align: center;
             margin-bottom: 24px;
+            background: #111;
+            border-radius: 12px;
+            padding: 12px;
         }
 
         #preview {
             max-width: 100%;
-            max-height: 300px;
+            max-height: 280px;
             border-radius: 8px;
             border: 1px solid #333333;
+        }
+
+        .pdf-preview-area {
+            background: #111;
+            border-radius: 12px;
+            padding: 16px;
+            max-height: 320px;
+            overflow-y: auto;
+            border: 1px solid #2a2a2a;
+        }
+
+        .pdf-page {
+            margin-bottom: 16px;
+            border-bottom: 1px solid #2a2a2a;
+            padding-bottom: 12px;
+        }
+
+        .pdf-page canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            background: white;
         }
 
         .progress-section {
@@ -202,9 +267,16 @@
             letter-spacing: 1px;
         }
 
+        .action-toolbar {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
         #result {
             width: 100%;
-            min-height: 200px;
+            min-height: 240px;
             background: #2a2a2a;
             border: 1px solid #333333;
             border-radius: 8px;
@@ -224,12 +296,14 @@
         #result.rtl {
             direction: rtl;
             text-align: right;
+            font-family: 'Cairo', 'JetBrains Mono', monospace;
         }
 
         .actions {
             display: flex;
             gap: 12px;
             margin-top: 16px;
+            flex-wrap: wrap;
         }
 
         .btn {
@@ -253,10 +327,6 @@
             transform: translateY(-1px);
         }
 
-        .btn-primary:active {
-            transform: translateY(0);
-        }
-
         .btn-secondary {
             background: #2a2a2a;
             color: #888888;
@@ -268,208 +338,509 @@
             color: #ffffff;
         }
 
+        .btn-warning {
+            background: #d45a00;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #ff7700;
+        }
+
         .btn-copy.copied {
             background: #00ffcc;
             color: #0f0f0f;
         }
 
-        .empty-message {
+        .info-note {
+            font-size: 11px;
+            color: #777;
+            margin-top: 12px;
             text-align: center;
-            padding: 48px 32px;
-            color: #888888;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #00d4aa20;
+            color: #00d4aa;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            margin-left: 8px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <header>
-                <h1>OCR</h1>
-                <p class="subtitle">Extract text from images</p>
-                <div class="language-selector">
-                    <button class="lang-btn active" data-lang="eng" id="lang-en">English</button>
-                    <button class="lang-btn" data-lang="ara" id="lang-ar">العربية</button>
-                </div>
-            </header>
-
-            <div class="upload-area" id="upload-area">
-                <div class="upload-icon">
-                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
-                    </svg>
-                </div>
-                <p class="upload-text">Drop image here or <span>click to upload</span></p>
-                <p class="upload-text" style="margin-top: 8px; font-size: 12px;">JPG, PNG, GIF, BMP, WEBP (max 10MB)</p>
+<div class="container">
+    <div class="card">
+        <header>
+            <h1>⚡ DOC OCR & PDF Toolkit <span style="font-size: 14px;">🇬🇧 🇸🇦</span></h1>
+            <p class="subtitle">Extract text from images & PDFs | English & Arabic support | PDF to Word</p>
+            <div class="mode-selector">
+                <button class="mode-btn active" data-mode="ocr">📸 Image OCR</button>
+                <button class="mode-btn" data-mode="pdf">📄 PDF to Word / Text</button>
             </div>
-            <input type="file" id="file-input" accept="image/jpeg,image/png,image/gif,image/bmp,image/webp">
-
-            <div class="preview-section" id="preview-section">
-                <div class="preview-container">
-                    <img id="preview" alt="Image preview">
-                </div>
+            <div class="language-selector" id="lang-selector-wrapper">
+                <button class="lang-btn active" data-lang="eng">English 🇬🇧</button>
+                <button class="lang-btn" data-lang="ara">العربية 🇸🇦</button>
             </div>
+        </header>
 
-            <div class="progress-section" id="progress-section">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-fill"></div>
-                </div>
-                <p class="progress-text" id="progress-text">Initializing OCR...</p>
+        <div class="upload-area" id="upload-area">
+            <div class="upload-icon">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                </svg>
             </div>
+            <p class="upload-text" id="upload-prompt">Drop image here or <span>click to upload</span></p>
+            <p class="file-limits" id="file-limits-msg">JPG, PNG, GIF, BMP, WEBP (max 10MB)</p>
+        </div>
+        <input type="file" id="file-input" accept="image/jpeg,image/png,image/gif,image/bmp,image/webp">
 
-            <div class="results-section" id="results-section">
-                <p class="results-label">Extracted Text</p>
-                <textarea id="result" placeholder="Text will appear here..."></textarea>
-                <div class="actions">
-                    <button class="btn btn-primary btn-copy" id="copy-btn">Copy</button>
-                    <button class="btn btn-secondary" id="clear-btn">Clear</button>
-                </div>
+        <div class="preview-section" id="preview-section">
+            <div class="preview-container">
+                <img id="preview" alt="Preview" style="display: none;">
+            </div>
+            <div id="pdf-preview-container" class="pdf-preview-area" style="display: none;"></div>
+        </div>
+
+        <div class="progress-section" id="progress-section">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <p class="progress-text" id="progress-text">Initializing...</p>
+        </div>
+
+        <div class="results-section" id="results-section">
+            <p class="results-label">📄 Extracted Content <span id="rtl-badge" class="badge" style="display: none;">RTL Mode</span></p>
+            <div class="action-toolbar">
+                <button class="btn btn-secondary" id="export-word-btn" style="display: none;">📝 Export as Word (.docx)</button>
+            </div>
+            <textarea id="result" placeholder="Extracted text will appear here..."></textarea>
+            <div class="actions">
+                <button class="btn btn-primary btn-copy" id="copy-btn">Copy</button>
+                <button class="btn btn-secondary" id="clear-btn">Clear</button>
+                <button class="btn btn-secondary" id="download-text-btn">📄 Download as .txt</button>
             </div>
         </div>
+        <div class="info-note" id="info-note">✨ Full English & Arabic support for both images and PDFs. Scanned PDFs will use OCR automatically.</div>
     </div>
+</div>
 
-    <script>
-        const uploadArea = document.getElementById('upload-area');
-        const fileInput = document.getElementById('file-input');
-        const previewSection = document.getElementById('preview-section');
-        const preview = document.getElementById('preview');
-        const progressSection = document.getElementById('progress-section');
-        const progressFill = document.getElementById('progress-fill');
-        const progressText = document.getElementById('progress-text');
-        const resultsSection = document.getElementById('results-section');
-        const resultTextarea = document.getElementById('result');
-        const copyBtn = document.getElementById('copy-btn');
-        const clearBtn = document.getElementById('clear-btn');
-        const langBtns = document.querySelectorAll('.lang-btn');
-        let currentLang = 'eng';
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-        // Language selector
-        langBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                langBtns.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentLang = btn.dataset.lang;
-                resultTextarea.classList.toggle('rtl', currentLang === 'ara');
-            });
+    // DOM elements
+    const uploadArea = document.getElementById('upload-area');
+    const fileInput = document.getElementById('file-input');
+    const previewSection = document.getElementById('preview-section');
+    const previewImg = document.getElementById('preview');
+    const pdfPreviewContainer = document.getElementById('pdf-preview-container');
+    const progressSectionEl = document.getElementById('progress-section');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+    const resultsSection = document.getElementById('results-section');
+    const resultTextarea = document.getElementById('result');
+    const copyBtn = document.getElementById('copy-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const exportWordBtn = document.getElementById('export-word-btn');
+    const downloadTxtBtn = document.getElementById('download-text-btn');
+    const uploadPrompt = document.getElementById('upload-prompt');
+    const fileLimitsMsg = document.getElementById('file-limits-msg');
+    const langBtns = document.querySelectorAll('.lang-btn');
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    const langSelectorWrapper = document.getElementById('lang-selector-wrapper');
+    const rtlBadge = document.getElementById('rtl-badge');
+
+    let currentMode = 'ocr';
+    let currentLang = 'eng';
+    let currentExtractedText = '';
+    let currentFileName = 'extracted_document';
+
+    // Apply RTL based on language
+    function applyRTL(isRTL) {
+        if (isRTL) {
+            resultTextarea.classList.add('rtl');
+            rtlBadge.style.display = 'inline-block';
+        } else {
+            resultTextarea.classList.remove('rtl');
+            rtlBadge.style.display = 'none';
+        }
+    }
+
+    // Language selector
+    langBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            langBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentLang = btn.dataset.lang;
+            applyRTL(currentLang === 'ara');
         });
+    });
 
-        // Upload area click
-        uploadArea.addEventListener('click', () => fileInput.click());
-
-        // File input change
-        fileInput.addEventListener('change', handleFile);
-
-        // Drag and drop
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
+    // Mode selector
+    modeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            modeBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentMode = btn.dataset.mode;
+            resetApp(true);
+            updateUIBasedOnMode();
         });
+    });
 
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
+    function updateUIBasedOnMode() {
+        if (currentMode === 'ocr') {
+            fileInput.accept = 'image/jpeg,image/png,image/gif,image/bmp,image/webp';
+            uploadPrompt.innerHTML = 'Drop image here or <span>click to upload</span>';
+            fileLimitsMsg.innerHTML = 'JPG, PNG, GIF, BMP, WEBP (max 10MB)';
+            langSelectorWrapper.style.display = 'flex';
+            exportWordBtn.style.display = 'none';
+            document.getElementById('info-note').innerHTML = '📸 OCR extracts text from images. Full English & Arabic support.';
+        } else {
+            fileInput.accept = 'application/pdf';
+            uploadPrompt.innerHTML = 'Drop PDF file here or <span>click to upload</span>';
+            fileLimitsMsg.innerHTML = 'PDF document (max 25MB) - Supports English & Arabic text, plus OCR for scanned PDFs';
+            langSelectorWrapper.style.display = 'flex';
+            exportWordBtn.style.display = 'inline-flex';
+            document.getElementById('info-note').innerHTML = '📄 PDF to Word: Extracts selectable text OR uses OCR (English/Arabic) for scanned documents. Converts to Word with proper RTL support.';
+        }
+        previewImg.style.display = 'none';
+        pdfPreviewContainer.style.display = 'none';
+        pdfPreviewContainer.innerHTML = '';
+        previewSection.classList.remove('visible');
+    }
 
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFile({ target: { files } });
-            }
-        });
+    // Upload handlers
+    uploadArea.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleFileUpload);
+    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length) handleFileUpload({ target: { files } });
+    });
 
-        function handleFile(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+    async function handleFileUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        resetApp(false);
+        currentFileName = file.name.replace(/\.[^/.]+$/, '');
 
-            // Validate file type
+        if (currentMode === 'ocr') {
             if (!file.type.match(/^image\/(jpeg|png|gif|bmp|webp)$/)) {
-                alert('Please upload a valid image file (JPG, PNG, GIF, BMP, or WEBP)');
+                alert('Please upload a valid image (JPG, PNG, GIF, BMP, WEBP)');
                 return;
             }
-
-            // Validate file size (10MB)
             if (file.size > 10 * 1024 * 1024) {
-                alert('File size must be less than 10MB');
+                alert('Image size must be less than 10MB');
                 return;
             }
-
-            // Show preview
             const reader = new FileReader();
             reader.onload = (e) => {
-                preview.src = e.target.result;
+                previewImg.src = e.target.result;
+                previewImg.style.display = 'block';
+                pdfPreviewContainer.style.display = 'none';
                 previewSection.classList.add('visible');
                 uploadArea.style.display = 'none';
-                processImage(file);
+                processImageOCR(file);
             };
             reader.readAsDataURL(file);
+        } else {
+            if (file.type !== 'application/pdf') {
+                alert('Please upload a PDF file');
+                return;
+            }
+            if (file.size > 25 * 1024 * 1024) {
+                alert('PDF size must be less than 25MB');
+                return;
+            }
+            previewImg.style.display = 'none';
+            pdfPreviewContainer.style.display = 'block';
+            previewSection.classList.add('visible');
+            uploadArea.style.display = 'none';
+            await processPDFWithOCRSupport(file);
         }
+    }
 
-        async function processImage(file) {
-            progressSection.classList.add('visible');
-            resultsSection.classList.remove('visible');
-            progressFill.style.width = '0%';
-            progressText.textContent = 'Initializing OCR...';
-
-            try {
-                const result = await Tesseract.recognize(file, currentLang, {
-                    logger: (m) => {
-                        if (m.status === 'recognizing text') {
-                            const percent = Math.round(m.progress * 100);
-                            progressFill.style.width = percent + '%';
-                            progressText.textContent = `Processing... ${percent}%`;
-                        } else {
-                            progressText.textContent = m.status;
-                        }
+    // OCR for images
+    async function processImageOCR(file) {
+        progressSectionEl.classList.add('visible');
+        resultsSection.classList.remove('visible');
+        progressFill.style.width = '0%';
+        progressText.textContent = 'Initializing OCR...';
+        
+        try {
+            const result = await Tesseract.recognize(file, currentLang, {
+                logger: (m) => {
+                    if (m.status === 'recognizing text') {
+                        const percent = Math.round(m.progress * 100);
+                        progressFill.style.width = percent + '%';
+                        progressText.textContent = `OCR Processing... ${percent}%`;
+                    } else {
+                        progressText.textContent = m.status;
                     }
-                });
-
-                progressSection.classList.remove('visible');
-                resultsSection.classList.add('visible');
-                resultTextarea.value = result.data.text.trim();
-
-                if (!result.data.text.trim()) {
-                    resultTextarea.value = 'No text detected in the image.';
                 }
-
-            } catch (error) {
-                progressSection.classList.remove('visible');
-                alert('Error processing image: ' + error.message);
-                resetApp();
-            }
+            });
+            progressSectionEl.classList.remove('visible');
+            resultsSection.classList.add('visible');
+            currentExtractedText = result.data.text.trim() || 'No text detected in the image.';
+            resultTextarea.value = currentExtractedText;
+        } catch (err) {
+            progressSectionEl.classList.remove('visible');
+            alert('OCR Error: ' + err.message);
+            resetApp(false);
         }
+    }
 
-        // Copy button
-        copyBtn.addEventListener('click', async () => {
-            const text = resultTextarea.value;
-            if (!text) return;
-
-            try {
-                await navigator.clipboard.writeText(text);
-                copyBtn.textContent = 'Copied!';
-                copyBtn.classList.add('copied');
-                setTimeout(() => {
-                    copyBtn.textContent = 'Copy';
-                    copyBtn.classList.remove('copied');
-                }, 2000);
-            } catch (err) {
-                alert('Failed to copy text');
+    // PDF processing with OCR fallback for scanned/non-selectable PDFs
+    async function processPDFWithOCRSupport(file) {
+        progressSectionEl.classList.add('visible');
+        resultsSection.classList.remove('visible');
+        progressFill.style.width = '0%';
+        progressText.textContent = 'Loading PDF document...';
+        
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, useSystemFonts: true });
+            const pdf = await loadingTask.promise;
+            const totalPages = Math.min(pdf.numPages, 20); // Limit to 20 pages for performance
+            let fullText = '';
+            let hasSelectableText = false;
+            
+            pdfPreviewContainer.innerHTML = '';
+            pdfPreviewContainer.style.display = 'block';
+            
+            // First pass: try to extract selectable text
+            for (let i = 1; i <= totalPages; i++) {
+                const pageProgress = (i / totalPages) * 50;
+                progressFill.style.width = pageProgress + '%';
+                progressText.textContent = `Checking page ${i}/${totalPages} for text...`;
+                
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                
+                if (pageText.trim().length > 0) {
+                    hasSelectableText = true;
+                    fullText += `\n\n--- Page ${i} ---\n${pageText}`;
+                } else {
+                    fullText += `\n\n--- Page ${i} (No selectable text - will use OCR) ---\n[OCR required for this page]`;
+                }
+                
+                // Render preview for first 3 pages
+                if (i <= 3) {
+                    const scale = 0.4;
+                    const viewport = page.getViewport({ scale });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    canvas.style.width = '100%';
+                    canvas.style.height = 'auto';
+                    canvas.style.borderRadius = '6px';
+                    canvas.style.marginBottom = '12px';
+                    await page.render({ canvasContext: context, viewport }).promise;
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'pdf-page';
+                    const title = document.createElement('div');
+                    title.innerText = `📄 Page ${i} Preview`;
+                    title.style.fontSize = '11px';
+                    title.style.color = '#aaa';
+                    title.style.marginBottom = '6px';
+                    pageDiv.appendChild(title);
+                    pageDiv.appendChild(canvas);
+                    pdfPreviewContainer.appendChild(pageDiv);
+                }
             }
+            
+            // If no selectable text found, perform OCR on each page
+            if (!hasSelectableText || fullText.trim().length < 50) {
+                progressText.textContent = 'No selectable text found. Running OCR (English/Arabic) on PDF pages...';
+                fullText = '';
+                
+                for (let i = 1; i <= totalPages; i++) {
+                    const pageProgress = 50 + ((i / totalPages) * 50);
+                    progressFill.style.width = pageProgress + '%';
+                    progressText.textContent = `OCR Page ${i}/${totalPages} (${currentLang === 'ara' ? 'Arabic' : 'English'} mode)...`;
+                    
+                    const page = await pdf.getPage(i);
+                    const scale = 1.5; // Higher scale for better OCR
+                    const viewport = page.getViewport({ scale });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    const context = canvas.getContext('2d');
+                    
+                    await page.render({ canvasContext: context, viewport }).promise;
+                    
+                    // Convert canvas to image blob for OCR
+                    const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                    
+                    // Perform OCR on this page image
+                    const ocrResult = await Tesseract.recognize(imageBlob, currentLang, {
+                        logger: (m) => {
+                            if (m.status === 'recognizing text') {
+                                progressText.textContent = `OCR Page ${i}/${totalPages} - ${Math.round(m.progress * 100)}%`;
+                            }
+                        }
+                    });
+                    
+                    const pageOCRText = ocrResult.data.text.trim();
+                    if (pageOCRText) {
+                        fullText += `\n\n--- Page ${i} (OCR ${currentLang === 'ara' ? 'Arabic' : 'English'}) ---\n${pageOCRText}`;
+                    } else {
+                        fullText += `\n\n--- Page ${i} ---\n[No text detected on this page]`;
+                    }
+                }
+            }
+            
+            currentExtractedText = fullText.trim() || 'No text could be extracted from this PDF. It may be empty or heavily distorted.';
+            resultTextarea.value = currentExtractedText;
+            progressSectionEl.classList.remove('visible');
+            resultsSection.classList.add('visible');
+            exportWordBtn.style.display = 'inline-flex';
+            
+        } catch (err) {
+            progressSectionEl.classList.remove('visible');
+            console.error(err);
+            alert('Failed to process PDF: ' + err.message);
+            resetApp(false);
+        }
+    }
+    
+    // Export to Word document with proper RTL support
+    async function exportToWord() {
+        if (!currentExtractedText || currentExtractedText.trim() === '') {
+            alert('No text content to export. Please extract text first.');
+            return;
+        }
+        
+        progressSectionEl.classList.add('visible');
+        progressFill.style.width = '30%';
+        progressText.textContent = 'Building Word document...';
+        
+        try {
+            const isRTL = (currentLang === 'ara');
+            const directionStyle = isRTL ? 'direction: rtl; text-align: right;' : 'direction: ltr; text-align: left;';
+            const fontFamily = isRTL ? "'Cairo', 'Segoe UI', Arial, sans-serif" : "'Calibri', 'Segoe UI', Arial, sans-serif";
+            
+            const htmlContent = `<!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Extracted Document - ${currentFileName}</title>
+                <style>
+                    body { 
+                        font-family: ${fontFamily}; 
+                        ${directionStyle}
+                        margin: 40px; 
+                        line-height: 1.6;
+                        background: white;
+                        color: black;
+                    }
+                    h1 { color: #00aa88; }
+                    h2 { color: #3388aa; margin-top: 20px; }
+                    pre { 
+                        white-space: pre-wrap; 
+                        font-family: ${isRTL ? "'Cairo', monospace" : "'Courier New', monospace"}; 
+                        background: #f4f4f4; 
+                        padding: 16px; 
+                        border-radius: 8px;
+                        ${directionStyle}
+                    }
+                    .page-break {
+                        page-break-before: always;
+                        margin-top: 30px;
+                        border-top: 2px solid #ccc;
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>📄 Extracted Content from: ${currentFileName}</h1>
+                <p>Generated on ${new Date().toLocaleString()}</p>
+                <p>Language: ${isRTL ? 'العربية (Arabic)' : 'English'} | Mode: ${currentMode === 'pdf' ? 'PDF Extraction' : 'OCR'}</p>
+                <hr />
+                <pre>${escapeHtml(currentExtractedText)}</pre>
+                <p style="color: #777; font-size: 12px; margin-top: 40px;">— Exported via OCR & PDF Toolkit (English/Arabic Support) —</p>
+            </body>
+            </html>`;
+            
+            const blob = new Blob([htmlContent], { type: 'application/msword' });
+            const fileName = `${currentFileName}_extracted_${isRTL ? 'AR' : 'EN'}_${Date.now()}.doc`;
+            saveAs(blob, fileName);
+            
+            progressFill.style.width = '100%';
+            progressText.textContent = 'Complete!';
+            setTimeout(() => {
+                if (progressSectionEl.classList.contains('visible')) {
+                    progressSectionEl.classList.remove('visible');
+                }
+            }, 1000);
+        } catch (err) {
+            progressSectionEl.classList.remove('visible');
+            alert('Word export error: ' + err.message);
+        }
+    }
+    
+    function escapeHtml(str) {
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
         });
-
-        // Clear button
-        clearBtn.addEventListener('click', resetApp);
-
-        function resetApp() {
-            previewSection.classList.remove('visible');
-            progressSection.classList.remove('visible');
-            resultsSection.classList.remove('visible');
-            uploadArea.style.display = 'block';
-            fileInput.value = '';
-            preview.src = '';
-            resultTextarea.value = '';
-            resultTextarea.classList.remove('rtl');
-            progressFill.style.width = '0%';
+    }
+    
+    function downloadAsTxt() {
+        if (!currentExtractedText) {
+            alert('No text to download');
+            return;
         }
-    </script>
+        const blob = new Blob([currentExtractedText], { type: 'text/plain;charset=utf-8' });
+        const fileName = `${currentFileName}_extracted_text_${Date.now()}.txt`;
+        saveAs(blob, fileName);
+    }
+    
+    copyBtn.addEventListener('click', async () => {
+        const text = resultTextarea.value;
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            copyBtn.textContent = 'Copied!';
+            copyBtn.classList.add('copied');
+            setTimeout(() => {
+                copyBtn.textContent = 'Copy';
+                copyBtn.classList.remove('copied');
+            }, 2000);
+        } catch (err) {
+            alert('Failed to copy');
+        }
+    });
+    
+    clearBtn.addEventListener('click', () => resetApp(false));
+    downloadTxtBtn.addEventListener('click', downloadAsTxt);
+    exportWordBtn.addEventListener('click', exportToWord);
+    
+    function resetApp(keepMode = false) {
+        previewSection.classList.remove('visible');
+        progressSectionEl.classList.remove('visible');
+        resultsSection.classList.remove('visible');
+        uploadArea.style.display = 'block';
+        fileInput.value = '';
+        previewImg.src = '';
+        previewImg.style.display = 'none';
+        pdfPreviewContainer.innerHTML = '';
+        pdfPreviewContainer.style.display = 'none';
+        resultTextarea.value = '';
+        currentExtractedText = '';
+        progressFill.style.width = '0%';
+    }
+    
+    updateUIBasedOnMode();
+    applyRTL(false);
+</script>
 </body>
 </html>

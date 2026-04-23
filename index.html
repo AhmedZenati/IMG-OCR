@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR - Extract Text from Images</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: #0f0f0f;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .card {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 32px;
+            border: 1px solid #333333;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #00d4aa;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #888888;
+        }
+
+        .language-selector {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .lang-btn {
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid #333333;
+            background: #2a2a2a;
+            color: #888888;
+        }
+
+        .lang-btn:hover {
+            background: #333333;
+            color: #ffffff;
+        }
+
+        .lang-btn.active {
+            background: #00d4aa;
+            color: #0f0f0f;
+            border-color: #00d4aa;
+        }
+
+        .upload-area {
+            border: 2px dashed #333333;
+            border-radius: 12px;
+            padding: 48px 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #2a2a2a;
+        }
+
+        .upload-area:hover {
+            border-color: #00d4aa;
+            background: #222222;
+        }
+
+        .upload-area.dragover {
+            border-color: #00d4aa;
+            background: #222222;
+        }
+
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            opacity: 0.6;
+        }
+
+        .upload-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: #00d4aa;
+        }
+
+        .upload-text {
+            font-size: 14px;
+            color: #888888;
+        }
+
+        .upload-text span {
+            color: #00d4aa;
+            text-decoration: underline;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .preview-section {
+            display: none;
+            margin-top: 24px;
+        }
+
+        .preview-section.visible {
+            display: block;
+        }
+
+        .preview-container {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        #preview {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            border: 1px solid #333333;
+        }
+
+        .progress-section {
+            display: none;
+            margin: 24px 0;
+        }
+
+        .progress-section.visible {
+            display: block;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #2a2a2a;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4aa, #00ffcc);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            color: #888888;
+            text-align: center;
+        }
+
+        .results-section {
+            display: none;
+            margin-top: 24px;
+        }
+
+        .results-section.visible {
+            display: block;
+        }
+
+        .results-label {
+            font-size: 12px;
+            color: #888888;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #result {
+            width: 100%;
+            min-height: 200px;
+            background: #2a2a2a;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            padding: 16px;
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            resize: vertical;
+            line-height: 1.6;
+        }
+
+        #result:focus {
+            outline: none;
+            border-color: #00d4aa;
+        }
+
+        #result.rtl {
+            direction: rtl;
+            text-align: right;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .btn-primary {
+            background: #00d4aa;
+            color: #0f0f0f;
+        }
+
+        .btn-primary:hover {
+            background: #00ffcc;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: #2a2a2a;
+            color: #888888;
+            border: 1px solid #333333;
+        }
+
+        .btn-secondary:hover {
+            background: #333333;
+            color: #ffffff;
+        }
+
+        .btn-copy.copied {
+            background: #00ffcc;
+            color: #0f0f0f;
+        }
+
+        .empty-message {
+            text-align: center;
+            padding: 48px 32px;
+            color: #888888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <header>
+                <h1>OCR</h1>
+                <p class="subtitle">Extract text from images</p>
+                <div class="language-selector">
+                    <button class="lang-btn active" data-lang="eng" id="lang-en">English</button>
+                    <button class="lang-btn" data-lang="ara" id="lang-ar">العربية</button>
+                </div>
+            </header>
+
+            <div class="upload-area" id="upload-area">
+                <div class="upload-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                    </svg>
+                </div>
+                <p class="upload-text">Drop image here or <span>click to upload</span></p>
+                <p class="upload-text" style="margin-top: 8px; font-size: 12px;">JPG, PNG, GIF, BMP, WEBP (max 10MB)</p>
+            </div>
+            <input type="file" id="file-input" accept="image/jpeg,image/png,image/gif,image/bmp,image/webp">
+
+            <div class="preview-section" id="preview-section">
+                <div class="preview-container">
+                    <img id="preview" alt="Image preview">
+                </div>
+            </div>
+
+            <div class="progress-section" id="progress-section">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p class="progress-text" id="progress-text">Initializing OCR...</p>
+            </div>
+
+            <div class="results-section" id="results-section">
+                <p class="results-label">Extracted Text</p>
+                <textarea id="result" placeholder="Text will appear here..."></textarea>
+                <div class="actions">
+                    <button class="btn btn-primary btn-copy" id="copy-btn">Copy</button>
+                    <button class="btn btn-secondary" id="clear-btn">Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const previewSection = document.getElementById('preview-section');
+        const preview = document.getElementById('preview');
+        const progressSection = document.getElementById('progress-section');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const resultsSection = document.getElementById('results-section');
+        const resultTextarea = document.getElementById('result');
+        const copyBtn = document.getElementById('copy-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const langBtns = document.querySelectorAll('.lang-btn');
+        let currentLang = 'eng';
+
+        // Language selector
+        langBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                langBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentLang = btn.dataset.lang;
+                resultTextarea.classList.toggle('rtl', currentLang === 'ara');
+            });
+        });
+
+        // Upload area click
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // File input change
+        fileInput.addEventListener('change', handleFile);
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile({ target: { files } });
+            }
+        });
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            if (!file.type.match(/^image\/(jpeg|png|gif|bmp|webp)$/)) {
+                alert('Please upload a valid image file (JPG, PNG, GIF, BMP, or WEBP)');
+                return;
+            }
+
+            // Validate file size (10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('File size must be less than 10MB');
+                return;
+            }
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                previewSection.classList.add('visible');
+                uploadArea.style.display = 'none';
+                processImage(file);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function processImage(file) {
+            progressSection.classList.add('visible');
+            resultsSection.classList.remove('visible');
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Initializing OCR...';
+
+            try {
+                const result = await Tesseract.recognize(file, currentLang, {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text') {
+                            const percent = Math.round(m.progress * 100);
+                            progressFill.style.width = percent + '%';
+                            progressText.textContent = `Processing... ${percent}%`;
+                        } else {
+                            progressText.textContent = m.status;
+                        }
+                    }
+                });
+
+                progressSection.classList.remove('visible');
+                resultsSection.classList.add('visible');
+                resultTextarea.value = result.data.text.trim();
+
+                if (!result.data.text.trim()) {
+                    resultTextarea.value = 'No text detected in the image.';
+                }
+
+            } catch (error) {
+                progressSection.classList.remove('visible');
+                alert('Error processing image: ' + error.message);
+                resetApp();
+            }
+        }
+
+        // Copy button
+        copyBtn.addEventListener('click', async () => {
+            const text = resultTextarea.value;
+            if (!text) return;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                copyBtn.textContent = 'Copied!';
+                copyBtn.classList.add('copied');
+                setTimeout(() => {
+                    copyBtn.textContent = 'Copy';
+                    copyBtn.classList.remove('copied');
+                }, 2000);
+            } catch (err) {
+                alert('Failed to copy text');
+            }
+        });
+
+        // Clear button
+        clearBtn.addEventListener('click', resetApp);
+
+        function resetApp() {
+            previewSection.classList.remove('visible');
+            progressSection.classList.remove('visible');
+            resultsSection.classList.remove('visible');
+            uploadArea.style.display = 'block';
+            fileInput.value = '';
+            preview.src = '';
+            resultTextarea.value = '';
+            resultTextarea.classList.remove('rtl');
+            progressFill.style.width = '0%';
+        }
+    </script>
+</body>
+</html>
